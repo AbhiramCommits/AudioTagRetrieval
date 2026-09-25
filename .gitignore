@@ -9,7 +9,7 @@ dist/
 build/
 .DS_Store
 
-data/
+/data/
 artifacts/
 *.pt
 *.pth
