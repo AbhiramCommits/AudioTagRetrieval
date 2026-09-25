@@ -31,7 +31,14 @@ eval:
 pipeline: data features train eval
 
 index:
-	@echo "index: FAISS index build not implemented yet"
+	$(PY) -m audiotag.index.build --model $(MODEL) --index-type flat
+	$(PY) -m audiotag.index.build --model $(MODEL) --index-type ivfpq
+
+benchmark:
+	$(PY) scripts/benchmark_index.py
+
+quality:
+	$(PY) -m audiotag.index.evaluate
 
 serve:
 	@echo "serve: API not implemented yet"
