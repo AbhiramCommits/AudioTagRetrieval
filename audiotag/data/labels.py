@@ -46,6 +46,12 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _sniff_sep(path: Path) -> str:
+    with open(path) as fh:
+        header = fh.readline()
+    return "\t" if header.count("\t") > header.count(",") else ","
+
+
 def tag_columns(df: pd.DataFrame) -> list[str]:
     """Return columns that look like binary 0/1 tag annotations."""
     cols = []
@@ -101,11 +107,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {annotations} not found; run 'python -m audiotag.data.download' first")
         return 1
 
-    df = pd.read_csv(annotations)
-    id_col = "clip_id" if "clip_id" in df.columns else df.columns[0]
-    df["clip_id"] = df[id_col].astype(str)
-    if id_col != "clip_id":
-        df = df.drop(columns=[id_col])
+    df = pd.read_csv(annotations, sep=_sniff_sep(annotations))
+    if "mp3_path" in df.columns:
+        df["mp3_path"] = df["mp3_path"].astype(str)
+        df["clip_id"] = df["mp3_path"].str.replace(r"\.mp3$", "", regex=True)
+    else:
+        id_col = "clip_id" if "clip_id" in df.columns else df.columns[0]
+        df["clip_id"] = df[id_col].astype(str)
+        df["mp3_path"] = df["clip_id"].map(
+            lambda cid: cid if cid.endswith(".mp3") else cid + ".mp3"
+        )
 
     tag_cols = merge_synonyms(df, tag_columns(df))
     print(f"found {len(tag_cols)} tags after synonym merging")

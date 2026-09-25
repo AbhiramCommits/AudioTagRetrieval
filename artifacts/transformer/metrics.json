@@ -1,0 +1,14 @@
+{
+  "model": "transformer",
+  "checkpoint": "artifacts/transformer/best.pt",
+  "best_val_map": 0.388256,
+  "n_test": 413,
+  "n_tags": 50,
+  "n_skipped_tags": 0,
+  "skipped_tags": [],
+  "macro_auc": 0.76433,
+  "macro_map": 0.202841,
+  "micro_map": 0.18868,
+  "baseline_macro_map": 0.051525,
+  "lift_over_baseline": 0.151315
+}

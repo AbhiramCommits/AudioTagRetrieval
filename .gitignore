@@ -10,7 +10,10 @@ build/
 .DS_Store
 
 /data/
-artifacts/
+artifacts/*
+!artifacts/*/
+artifacts/*/*
+!artifacts/*/metrics.json
 *.pt
 *.pth
 *.faiss

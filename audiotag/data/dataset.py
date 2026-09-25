@@ -24,12 +24,15 @@ class MTATDataset(Dataset):
         split: str = "train",
         config: Config | None = None,
         training: bool | None = None,
+        limit: int | None = None,
     ) -> None:
         self.cfg = config or Config()
         self.split = split
         self.training = split == "train" if training is None else training
         self.n_frames = self.cfg.n_frames
         self.df = pd.read_parquet(self.cfg.processed_dir / f"{split}.parquet")
+        if limit is not None:
+            self.df = self.df.iloc[:limit].reset_index(drop=True)
 
     def __len__(self) -> int:
         return len(self.df)

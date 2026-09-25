@@ -1,0 +1,14 @@
+{
+  "model": "cnn",
+  "checkpoint": "artifacts/cnn/best.pt",
+  "best_val_map": 0.393368,
+  "n_test": 413,
+  "n_tags": 50,
+  "n_skipped_tags": 0,
+  "skipped_tags": [],
+  "macro_auc": 0.848034,
+  "macro_map": 0.268282,
+  "micro_map": 0.221915,
+  "baseline_macro_map": 0.051525,
+  "lift_over_baseline": 0.216757
+}

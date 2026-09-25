@@ -1,6 +1,13 @@
 PY := uv run python
 
-.PHONY: setup data labels features train eval index serve test lint
+MODEL ?= cnn
+SUBSET ?= 2000
+EPOCHS ?= 30
+BATCH ?= 32
+LR ?= 0.001
+WORKERS ?= 4
+
+.PHONY: setup data labels features train eval pipeline index serve test lint
 
 setup:
 	uv sync
@@ -13,13 +20,15 @@ labels:
 	$(PY) -m audiotag.data.labels
 
 features:
-	$(PY) scripts/precompute_features.py $(if $(WORKERS),--workers $(WORKERS),)
+	$(PY) scripts/precompute_features.py --workers $(WORKERS)
 
-train:
-	@echo "train: model not implemented yet"
+train: features
+	$(PY) -m audiotag.train --model $(MODEL) --epochs $(EPOCHS) --batch-size $(BATCH) --lr $(LR) $(if $(SUBSET),--subset $(SUBSET),)
 
 eval:
-	@echo "eval: model not implemented yet"
+	$(PY) -m audiotag.eval --model $(MODEL)
+
+pipeline: data features train eval
 
 index:
 	@echo "index: FAISS index build not implemented yet"
