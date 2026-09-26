@@ -23,6 +23,9 @@ dependencies = [
     "tensorboard>=2.14",
     "torchcodec==0.16.0",
     "soundfile>=0.12",
+    "onnx>=1.16",
+    "onnxruntime>=1.19",
+    "onnxscript>=0.7.2",
 ]
 
 [dependency-groups]

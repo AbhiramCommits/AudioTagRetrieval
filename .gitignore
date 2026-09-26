@@ -19,6 +19,7 @@ artifacts/*
 !artifacts/*/
 artifacts/*/*
 !artifacts/*/metrics.json
+!artifacts/*/metrics.jsonl
 !artifacts/.gitkeep
 *.pt
 *.pth

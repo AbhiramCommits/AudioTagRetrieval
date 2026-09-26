@@ -21,12 +21,14 @@ AUDIOTAG_TORCH_THREADS (2).
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import os
 import shutil
 import subprocess
 import threading
 import time
+import uuid
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -40,6 +42,8 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from audiotag.api.engines import build_engine
+from audiotag.api.logging import get_logger, setup_logging
 from audiotag.config import Config
 from audiotag.features.melspec import crop_or_pad, log_mel
 from audiotag.index.search import Retriever
@@ -49,11 +53,15 @@ from audiotag.train import get_device
 MODEL_NAME = os.environ.get("AUDIOTAG_MODEL", "cnn")
 INDEX_TYPE = os.environ.get("AUDIOTAG_INDEX_TYPE", "flat")
 SERVE_DEVICE = os.environ.get("AUDIOTAG_SERVE_DEVICE", "auto")
+SERVE_BACKEND = os.environ.get("AUDIOTAG_BACKEND", "torch")
+LOG_LEVEL = os.environ.get("AUDIOTAG_LOG_LEVEL", "info")
 TOP_K = int(os.environ.get("AUDIOTAG_TOP_K", "20"))
 MAX_UPLOAD_BYTES = int(float(os.environ.get("AUDIOTAG_MAX_UPLOAD_MB", "20")) * 1024 * 1024)
 ARTIFACTS_DIR = Path(os.environ.get("AUDIOTAG_ARTIFACTS", "artifacts"))
 TORCH_THREADS = int(os.environ.get("AUDIOTAG_TORCH_THREADS", "2"))
 MAX_CONCURRENT = int(os.environ.get("AUDIOTAG_MAX_CONCURRENT", "8"))
+
+logger = get_logger("audiotag.api")
 
 ALLOWED_CONTENT_TYPES = {
     "audio/mpeg",
@@ -98,6 +106,8 @@ class HealthResponse(BaseModel):
     index_type: str
     index_vectors: int
     device: str
+    backend: str
+    checkpoint_sha256: str
 
 
 # ---------------------------------------------------------------- metrics
@@ -290,9 +300,7 @@ def analyze_audio(
     stages["mel_ms"] = (time.perf_counter() - t1) * 1000.0
 
     t2 = time.perf_counter()
-    with torch.inference_mode():
-        embedding = app["model"].embed(mel)  # [1, D]
-        logits = app["model"].head(embedding)  # [1, C]
+    logits, embedding = app["engine"].run(mel)  # [1, C], [1, D]
     probs = torch.sigmoid(logits[0]).float().cpu().numpy()
     stages["forward_ms"] = (time.perf_counter() - t2) * 1000.0
 
@@ -325,16 +333,29 @@ def _load_models() -> dict:
     checkpoint = ARTIFACTS_DIR / MODEL_NAME / "best.pt"
     if not checkpoint.exists():
         raise RuntimeError(f"checkpoint not found: {checkpoint}")
+    checkpoint_sha = hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:16]
     ckpt = torch.load(checkpoint, map_location="cpu", weights_only=False)
     model = build_model(ckpt["model"], n_classes=len(ckpt["tags"])).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
 
+    if SERVE_BACKEND == "onnx":
+        onnx_path = ARTIFACTS_DIR / MODEL_NAME / "model.onnx"
+        if not onnx_path.exists():
+            raise RuntimeError(
+                f"AUDIOTAG_BACKEND=onnx but {onnx_path} is missing; "
+                "run scripts/export_onnx.py first"
+            )
+        engine = build_engine("onnx", model, device, onnx_path)
+    elif SERVE_BACKEND == "torch":
+        engine = build_engine("torch", model, device)
+    else:
+        raise RuntimeError(f"unknown AUDIOTAG_BACKEND {SERVE_BACKEND!r} (torch or onnx)")
+
     index_path = ARTIFACTS_DIR / "index" / f"{INDEX_TYPE}.faiss"
     retriever = Retriever(index_path, ARTIFACTS_DIR / "index" / "id_map.parquet")
 
-    with torch.inference_mode():
-        probe = model.embed(torch.zeros(1, 1, cfg.n_mels, cfg.n_frames, device=device))
+    _, probe = engine.run(torch.zeros(1, 1, cfg.n_mels, cfg.n_frames, device=device))
     if probe.shape[-1] != retriever.dim:
         raise RuntimeError(
             f"model embedding dim {probe.shape[-1]} does not match index dim {retriever.dim}; "
@@ -344,21 +365,51 @@ def _load_models() -> dict:
     return {
         "cfg": cfg,
         "device": device,
-        "model": model,
+        "engine": engine,
         "retriever": retriever,
         "tags": list(ckpt["tags"]),
         "top_k": min(TOP_K, retriever.index.ntotal),
+        "backend": SERVE_BACKEND,
+        "checkpoint_sha256": checkpoint_sha,
     }
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_logging(LOG_LEVEL)
     _app_state.update(_load_models())
+    logger.info(
+        "startup complete",
+        extra={
+            "backend": _app_state["backend"],
+            "checkpoint_sha256": _app_state["checkpoint_sha256"],
+            "index_vectors": _app_state["retriever"].index.ntotal,
+        },
+    )
     yield
     _app_state.clear()
 
 
 app = FastAPI(title="audio-tag-retrieval", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_logging_middleware(request, call_next):
+    request_id = uuid.uuid4().hex[:12]
+    start = time.perf_counter()
+    response = await call_next(request)
+    response.headers["X-Request-Id"] = request_id
+    logger.info(
+        "request",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "duration_ms": round((time.perf_counter() - start) * 1000.0, 2),
+        },
+    )
+    return response
 
 
 @app.middleware("http")
@@ -434,6 +485,8 @@ async def healthz() -> HealthResponse:
         index_type=INDEX_TYPE,
         index_vectors=_app_state["retriever"].index.ntotal,
         device=str(_app_state["device"]),
+        backend=_app_state["backend"],
+        checkpoint_sha256=_app_state["checkpoint_sha256"],
     )
 
 

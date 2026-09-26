@@ -8,9 +8,11 @@ services:
       AUDIOTAG_MODEL: cnn
       AUDIOTAG_INDEX_TYPE: flat
       AUDIOTAG_SERVE_DEVICE: cpu
+      AUDIOTAG_BACKEND: torch
       AUDIOTAG_TOP_K: "20"
       AUDIOTAG_TORCH_THREADS: "2"
       AUDIOTAG_MAX_CONCURRENT: "8"
+      AUDIOTAG_LOG_LEVEL: info
     volumes:
       - ./artifacts:/app/artifacts
     healthcheck:

@@ -10,16 +10,19 @@ from tests.helpers import TAGS, FakeRetriever, TinyEmbedModel
 def client(monkeypatch):
     from fastapi.testclient import TestClient
 
+    from audiotag.api.engines import TorchEngine
     from audiotag.api.main import app
     from audiotag.config import Config
 
     fake_state = {
         "cfg": Config(),
         "device": torch.device("cpu"),
-        "model": TinyEmbedModel(n_classes=len(TAGS), dim=8),
+        "engine": TorchEngine(TinyEmbedModel(n_classes=len(TAGS), dim=8), torch.device("cpu")),
         "retriever": FakeRetriever(ntotal=5, dim=8),
         "tags": TAGS,
         "top_k": 5,
+        "backend": "torch",
+        "checkpoint_sha256": "0123456789abcdef",
     }
     monkeypatch.setattr("audiotag.api.main._load_models", lambda: fake_state)
     with TestClient(app) as test_client:
@@ -79,9 +82,24 @@ def test_healthz_shape(client):
     response = client.get("/healthz")
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"model", "index_type", "index_vectors", "device"}
+    assert set(body) == {
+        "model",
+        "index_type",
+        "index_vectors",
+        "device",
+        "backend",
+        "checkpoint_sha256",
+    }
     assert body["index_vectors"] == 5
     assert body["device"] == "cpu"
+    assert body["backend"] == "torch"
+    assert body["checkpoint_sha256"] == "0123456789abcdef"
+
+
+def test_responses_carry_request_id(client, wav_bytes):
+    response = client.post("/analyze", files={"file": ("clip.wav", wav_bytes, "audio/wav")})
+    assert "x-request-id" in response.headers
+    assert len(response.headers["x-request-id"]) == 12
 
 
 def _metric_value(text: str, metric: str, endpoint: str) -> int:
