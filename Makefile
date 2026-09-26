@@ -50,7 +50,7 @@ loadtest:
 	$(PY) scripts/load_test.py $(if $(CONCURRENCY),--concurrency $(CONCURRENCY),) $(if $(DURATION),--duration $(DURATION),)
 
 test:
-	uv run pytest -q
+	uv run pytest -q --cov=audiotag --cov-report=term-missing --cov-fail-under=75
 
 lint:
 	uv run ruff check .

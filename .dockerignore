@@ -4,8 +4,11 @@ reports/
 scripts/
 tests/
 .git/
+.github/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 artifacts/*/tb/

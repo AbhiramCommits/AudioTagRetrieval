@@ -41,7 +41,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from audiotag.config import Config
-from audiotag.features.melspec import log_mel
+from audiotag.features.melspec import crop_or_pad, log_mel
 from audiotag.index.search import Retriever
 from audiotag.models import build_model
 from audiotag.train import get_device
@@ -263,15 +263,6 @@ def _decode(data: bytes) -> tuple[torch.Tensor, int]:
     if backend == "libsndfile":
         return _decode_libsndfile(data)
     return torchaudio.load(io.BytesIO(data), backend=backend)
-
-
-def crop_or_pad(mel: torch.Tensor, n_frames: int) -> torch.Tensor:
-    """Center-crop to n_frames, or zero-pad shorter clips (eval-style)."""
-    length = mel.shape[-1]
-    if length >= n_frames:
-        start = (length - n_frames) // 2
-        return mel[..., start : start + n_frames]
-    return torch.nn.functional.pad(mel, (0, n_frames - length))
 
 
 def analyze_audio(

@@ -1,5 +1,6 @@
 """Log-mel spectrogram feature extraction with torchaudio."""
 
+import torch
 import torchaudio
 from torch import Tensor
 
@@ -42,3 +43,12 @@ def log_mel(
     mean = db.mean()
     std = db.std()
     return (db - mean) / (std + eps)
+
+
+def crop_or_pad(mel: Tensor, n_frames: int) -> Tensor:
+    """Center-crop to ``n_frames``, or zero-pad shorter clips (eval-style)."""
+    length = mel.shape[-1]
+    if length >= n_frames:
+        start = (length - n_frames) // 2
+        return mel[..., start : start + n_frames]
+    return torch.nn.functional.pad(mel, (0, n_frames - length))

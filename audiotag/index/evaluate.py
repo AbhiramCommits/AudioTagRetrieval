@@ -63,13 +63,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data-dir", default="data")
     parser.add_argument("--index-dir", default="artifacts/index")
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        help="checkpoint path (default: artifacts/{model}/best.pt)",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config(data_dir=Path(args.data_dir))
     device = get_device(args.device)
     tags = load_tags(cfg)
 
-    checkpoint = Path("artifacts") / args.model / "best.pt"
+    checkpoint = (
+        Path(args.checkpoint) if args.checkpoint else Path("artifacts") / args.model / "best.pt"
+    )
     ckpt = torch.load(checkpoint, map_location="cpu", weights_only=False)
     model = build_model(ckpt["model"], n_classes=len(ckpt["tags"])).to(device)
     model.load_state_dict(ckpt["model_state_dict"])

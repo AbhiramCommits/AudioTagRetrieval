@@ -9,11 +9,17 @@ dist/
 build/
 .DS_Store
 
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 /data/
 artifacts/*
 !artifacts/*/
 artifacts/*/*
 !artifacts/*/metrics.json
+!artifacts/.gitkeep
 *.pt
 *.pth
 *.faiss
