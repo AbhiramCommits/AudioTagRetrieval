@@ -17,9 +17,10 @@ import sys
 import time
 from pathlib import Path
 
-# torch and faiss each bundle their own libomp on macOS; running both in one
+# On macOS torch and faiss each bundle their own libomp; running both in one
 # process segfaults unless each runtime is single-threaded.
-os.environ.setdefault("OMP_NUM_THREADS", "1")
+if sys.platform == "darwin":
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import faiss
 import numpy as np

@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    ports:
+      # 8070 on the host: 8000 is taken by another local service here.
+      - "8070:8000"
+    environment:
+      AUDIOTAG_MODEL: cnn
+      AUDIOTAG_INDEX_TYPE: flat
+      AUDIOTAG_SERVE_DEVICE: cpu
+      AUDIOTAG_TOP_K: "20"
+      AUDIOTAG_TORCH_THREADS: "2"
+      AUDIOTAG_MAX_CONCURRENT: "8"
+    volumes:
+      - ./artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

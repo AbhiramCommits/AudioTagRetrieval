@@ -41,7 +41,13 @@ quality:
 	$(PY) -m audiotag.index.evaluate
 
 serve:
-	@echo "serve: API not implemented yet"
+	docker compose up --build
+
+serve-dev:
+	$(PY) -m uvicorn audiotag.api.main:app --reload
+
+loadtest:
+	$(PY) scripts/load_test.py $(if $(CONCURRENCY),--concurrency $(CONCURRENCY),) $(if $(DURATION),--duration $(DURATION),)
 
 test:
 	uv run pytest -q
